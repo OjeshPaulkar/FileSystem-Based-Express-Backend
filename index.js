@@ -109,7 +109,7 @@ app.delete("/:id", (req,res) => {
         res.status(404).json({msg : "Todo with the give ID is not Found"});
     }
 
-    todos = todos.filter(todo => todo.is != id);
+    todos = todos.filter(todo => todo.id != id);
     writeTodosToFile(todos);
 
     res.json(todos);
