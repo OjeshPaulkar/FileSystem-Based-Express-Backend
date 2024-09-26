@@ -1,6 +1,8 @@
 const express = require("express");
 const mongoose = require("mongoose");
 const jwt = require("jsonwebtoken");
+const bcrypt = require("bcrypt");
+const { z } = require("zod");
 const port = 3000;
 const { auth, JWT_SECREAT } = require("./auth");
 const { UserModel, TodoModel } = require("./db");
@@ -8,41 +10,71 @@ const { UserModel, TodoModel } = require("./db");
 const app = express();
 app.use(express.json());
 
-mongoose.connect("mongodb+srv://ojesh:FhNlVDXRKYadsH7u@cluster0.pl8gi.mongodb.net/Todo-App-DB");
+mongoose.connect("");
 
-app.post("/signup", async (req,res) => {
-    const { username, email, password } = req.body;
+
+app.post("/signup", async (req,res) => {   
 try {
-    await UserModel.create({
-        username,
-        email,
-        password
-    })
-    res.json({
-        msg : "You are Sucessfully Signed Up"
+        const mySchema = z.object({
+            username: z.string().min(5).max(12),
+            email: z.string().email(),
+            password: z.string().min(7).max(12)
+                        .refine((password) => /[A-Z]/.test(password), {
+                            message: "Password must consist of atleast one Upper case Character",
+                        })
+                        .refine((password) => /[a-z]/.test(password), {
+                            message: "Password must consist of atleat one lowercase Charater",
+                        })
+                        .refine((password) => /[!@#$%^&*()+-]/.test(password), {
+                            message: "Password must consist of atleast one Special Character",
+                        })
+        });
+        const verifiedData = mySchema.safeParse(req.body);
+        if(!verifiedData.success) {
+            return res.status(403).json({message: verifiedData.error.issues});
+        }
+        const { username, email, password } = req.body;
+       const hashedPassword = await bcrypt.hash(password, 5);
+
+        await UserModel.create({
+            username,
+            email,
+            password: hashedPassword
+        })
+        res.json({
+            msg : "You are Sucessfully Signed Up"
     })
 } catch (error) {
    return res.json({msg : error.message})
 }
 })
 
+
 app.post("/signin",async (req,res) => {
     const { name, email, password } = req.body;
     try {
-        const responce = await UserModel.findOne({
+        const user = await UserModel.findOne({
             email : email,
-            password: password
         })
-        if(responce) {
-            const token = jwt.sign({
-                id: responce._id.toString()
-            },JWT_SECREAT);
-            res.json({token : token})
+
+        if(!user) {
+            return res.status(403).json({msg: "Invalid Credentials - Email does not exists"});
         }
+
+        const verifiedPassword = await bcrypt.compare(password, user.password);
+
+        if(!verifiedPassword) {
+           return res.status(403).json({msg : "Invalid Credentials - Password is Incorrect"})
+        }
+        const token = jwt.sign({
+            id: user._id.toString()
+        },JWT_SECREAT);
+        res.json({token : token })
     } catch (error) {
-        res.status(403).json({msg : "Invalid Credentials"});
+        res.status(500).json({msg : "Server Error"});
     } 
 })
+
 
 app.get("/todos", auth, async (req,res) => {
     const { userId }  = req;
@@ -55,9 +87,9 @@ try {
     })
 } catch (error) {
     res.status(403).json({msg : error.message})
-}
-   
+} 
 })
+
 
 app.post("/todo", auth,async (req,res) => {
     const { description, status} = req.body;
