@@ -3,14 +3,20 @@ const mongoose = require("mongoose");
 const jwt = require("jsonwebtoken");
 const bcrypt = require("bcrypt");
 const { z } = require("zod");
+const cors = require("cors");
 const port = 3000;
 const { auth, JWT_SECREAT } = require("./auth");
 const { UserModel, TodoModel } = require("./db");
 
 const app = express();
 app.use(express.json());
+app.use(cors());
 
-mongoose.connect("");
+mongoose.connect("mongodb+srv://ojesh:FhNlVDXRKYadsH7u@cluster0.pl8gi.mongodb.net/Todo-App-DB");
+
+app.get("/", (req,res) => {
+    res.sendFile(__dirname + "/index.html");
+})
 
 
 app.post("/signup", async (req,res) => {   
@@ -18,7 +24,9 @@ try {
         const mySchema = z.object({
             username: z.string().min(5).max(12),
             email: z.string().email(),
-            password: z.string().min(7).max(12)
+            password: z.string()
+                        .min(7)
+                        .max(20)
                         .refine((password) => /[A-Z]/.test(password), {
                             message: "Password must consist of atleast one Upper case Character",
                         })
@@ -129,8 +137,10 @@ app.put("/updateTodo", auth, async (req,res) => {
         console.log(dbUserId);
 
         if (userId===dbUserId) {
-            todo.description = description;
-            todo.status = todoStatus;
+            todo.description = description || todo.description;
+            if(todo.status !== undefined) {
+                todo.status = todoStatus;
+            }
 
             await todo.save();
             return res.status(200).json({message: "Todo Updated Sucessfully"});
